@@ -60,6 +60,7 @@ vector<int> strtovec(std::string foo)
 
 }
 
+
 //change a partition that starts at >1 to a partition that starts at 0
 //then make all class values consecutive, i.e. 0,1,2,3, not 0,1,3,4, so that the vector.size()
 //is the same as max_element() + 1
@@ -108,6 +109,94 @@ vector<int> zeroInd(vector<int> gen)
 	
 	return translateVec;
 }
+
+//sensibly label the partitions, using the restrictive growth function
+int rgf(vector<int>& a, vector<int>& b)
+{
+	int x; //x is current new number
+	int z = 0; //z is the replacement value, which will index up
+	vector<int> reg; //holds list of values that have been processed so should be ignored
+	
+	//rgf vector a
+	for (int i=0;i<=a.size();++i)
+	{
+		x = a[i];
+		//if x present in reg, ignore, if not relabel
+		if ( std::find(reg.begin(), reg.end(), x) != reg.end() ) continue;
+		else
+		{
+			reg.push_back(z); //add the replacement value to the list of values to ignore in the future
+			std::replace(a.begin(), a.end(), z, -9);
+			std::replace(a.begin(), a.end(), x, z);
+			std::replace(a.begin(), a.end(), -9, x);
+			++z;
+		}
+	}
+	//rgf vector b
+	z = 0;
+	vector<int>().swap(reg); //clear register of values to ignore
+	for (int i=0;i<=b.size();++i)
+	{
+		x = b[i];
+		//if x present in reg, ignore, if not relabel
+		if ( std::find(reg.begin(), reg.end(), x) != reg.end() ) continue;
+		else
+		{
+			reg.push_back(z); //add the replacement value to the list of values to ignore in the future
+			std::replace(b.begin(), b.end(), z, -9);
+			std::replace(b.begin(), b.end(), x, z);
+			std::replace(b.begin(), b.end(), -9, x);
+			++z;
+		}
+	}
+
+	/* concatenate input vectors so that sets in partition have consistent 'names'
+	// this might be useful in some circumstances, but is irrelevant to calculation of the pd
+	//vector<int>s received are zero indexed but not in order
+	//combine into one vector
+	vector<int> c = a; 
+	c.insert(c.end(), b.begin(), b.end());
+	
+	//perform replacements
+	for (int i=0;i<=c.size();++i)
+	{
+		x = c[i];
+		//if x present in reg, ignore, if not relabel
+		if ( std::find(reg.begin(), reg.end(), x) != reg.end() ) continue;
+		else
+		{
+			reg.push_back(z); //add the replacement value to the list of values to ignore in the future
+			std::replace(c.begin(), c.end(), z, -9);
+			std::replace(c.begin(), c.end(), x, z);
+			std::replace(c.begin(), c.end(), -9, x);
+			++z;
+		}
+	}
+	
+	//extract original vectors to update by reference
+	vector<int>::const_iterator ab = c.begin(); //beginning of a in concatenated vector c
+	vector<int>::const_iterator ae = c.begin() + a.size(); //end of a
+	vector<int>::const_iterator bb = c.begin() + a.size(); //begin of b
+	vector<int>::const_iterator be = c.end(); //end of c
+	
+	vector<int> anew(ab, ae);
+	vector<int> bnew(bb, be);
+	a = anew;
+	b = bnew;
+	*/
+	
+	/*
+	cout << "c: ";
+	for (unsigned int j=0;j<c.size();++j) cout << c[j];
+	cout << "\n";
+	cout << "a.size()=" << a.size() << " b.size()=" << b.size() << "\n";
+	*/
+	
+	return 0;
+}
+
+
+
 
 //normalize pairwise partition distance matrix using maximum partition distance possible
 //uses formulas for maximum "transfer distance" from Charon et al. 2006, Journal of Classification 23:103
@@ -169,23 +258,41 @@ double normpd(vector<pair<int, int> > pqmatrix, int n, int cost)
 int main( int argc, char* argv[] )
 {
 	//declare initial variables
-	std::string DoNorm;
+	std::string DoNorm = "no";
+	std::string BeSensible = "no";
 	const char* e;
 	const char* g;
 	
 	//parse the command line for options
-	if ( string(argv[1]) == "-n" ) 
-    	{
-        	DoNorm = "yes"; //key to normalize or not
- 			e = argv[2]; //partition 1
-			g = argv[3]; //partition 2
- 		}
-		else
+	for (int i=0;i<argc;i++)
+	{
+		if ( string(argv[i]) == "-n" ) 
 		{
-        	DoNorm = "no";
- 			e = argv[1];
-			g = argv[2];
+			DoNorm = "yes"; //key to normalize or not
 		}
+		if ( string(argv[i]) == "-l" )
+		{
+			BeSensible = "yes"; //key to relabel or not
+		}
+	}
+	
+	//load the partitions
+	if ( (DoNorm == "yes" && BeSensible == "yes") )
+	{
+		e = argv[3]; //partition 1
+		g = argv[4]; //partition 2
+	}
+	else if ( (DoNorm == "yes" && BeSensible == "no") || (DoNorm == "no" && BeSensible == "yes") )
+	{
+		e = argv[2];
+		g = argv[3];
+	}
+	else
+	{
+		e = argv[1];
+		g = argv[2];
+	}
+	
 	//extract the partitions presented on the command line into vectors
 	//convert to string
 	std::string ein(e);
@@ -200,7 +307,8 @@ int main( int argc, char* argv[] )
 	//load the comma-delimited string into a vector<int>
 	std::vector<int> gen = strtovec(gin);
 	std::vector<int> env = strtovec(ein);
-	
+	int nsamp = gen.size(); //nsamp is the number of samples in the partition
+
 	//test whether the vectors contain an error code, indicating that not all input was in integer form
 	if ( ( gen[1] == -9 ) || ( env[1] == -9 ) )
 	{
@@ -229,7 +337,26 @@ int main( int argc, char* argv[] )
 	//zero index partition coding in env, gen.  make values consecutive.
 	vector<int> b = zeroInd(gen);
 	vector<int> a = zeroInd(env);
-	
+
+	/*
+		//print out
+		for (unsigned int k=0;k<a.size();k++) cout << a[k];
+		cout << " ";
+		for (unsigned int k=0;k<b.size();k++) cout << b[k];
+		cout << "\n";
+	*/
+
+	//apply restrictive growth function to relabel partitions, updates a/b as reference
+	if ( BeSensible == "yes" )
+	{
+		rgf(a,b);
+		//print out
+		for (unsigned int k=0;k<a.size();k++) cout << a[k];
+		cout << " ";
+		for (unsigned int k=0;k<b.size();k++) cout << b[k];
+		cout << " ";
+	}
+
 	/*
 	cout << "env  ";
 	for (unsigned int k=0;k<a.size();k++) cout << a[k];
@@ -237,7 +364,7 @@ int main( int argc, char* argv[] )
 	for (unsigned int k=0;k<b.size();k++) cout << b[k];
 	cout << endl;
 	*/
-		
+	
 	//identify largest cluster number in either partition (this is the maximum number of clusters, minus one, because partition is now zero-indexed)
 	int maxP;
 	int amax = ( *max_element(a.begin(),a.end()) ); //get maximum value of vectors a, b.  must * (dereference) to get value instead of iterator
@@ -341,9 +468,8 @@ int main( int argc, char* argv[] )
 		//add paired max number of subsets to pqmatrix 
 		vector<pair<int, int> > pqmatrix;
 		pqmatrix.push_back( make_pair(amax+1, bmax+1) );
-		int n = gen.size(); //n is the number of samples in the partition
 		//calculate the max number of partitions, then normalize the pd
-		double npd = normpd(pqmatrix, n, cost);
+		double npd = normpd(pqmatrix, nsamp, cost);
 	
 		cout << npd << "\n";
 	}
